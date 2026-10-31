@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PrintsNCode · Conversor universal de G-code</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --bg:#0c0e11; --panel:#13161b; --panel2:#171b21; --line:#252b34;
+    --ink:#e8ebef; --ink-dim:#8b93a0; --ink-faint:#5a6371;
+    --accent:#ff7f32; --accent-soft:#ffae7c;
+    --ok:#54c98a; --warn:#ffcc55; --bad:#ff5d5d;
+    --drop-hover:#1b1d1c; --view-glow:#15191f; --view-bg:#0a0c0f;
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+    --disp:"Space Grotesk",system-ui,sans-serif;
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6f8; --panel:#ffffff; --panel2:#f0f3f6; --line:#d9e0e7;
+    --ink:#171b21; --ink-dim:#4e5967; --ink-faint:#768292;
+    --accent:#d9651f; --accent-soft:#9b4515;
+    --ok:#198754; --warn:#a66b00; --bad:#c03535;
+    --drop-hover:#eef3f7; --view-glow:#eef2f7; --view-bg:#dfe6ee;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--disp);-webkit-font-smoothing:antialiased;line-height:1.45}
+  a{color:var(--accent)}
+  code{font-family:var(--mono);font-size:.92em;color:var(--accent-soft)}
+  .wrap{max-width:1280px;margin:0 auto;padding:22px 22px 60px}
+  header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:22px}
+  .brand{font-weight:700;letter-spacing:.5px;font-size:15px}.brand b{color:var(--accent)}
+  h1{font-size:25px;font-weight:700;margin:0;letter-spacing:-.5px}
+  .sub{font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin-left:auto}
+  .sub .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:middle}
+  .grid{display:grid;grid-template-columns:350px 1fr;gap:18px}
+  @media(max-width:880px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+  .card h2{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--ink-dim);margin:0;padding:13px 16px;border-bottom:1px solid var(--line);font-family:var(--mono);font-weight:600;display:flex;justify-content:space-between;align-items:center}
+  .card h2 .tag{font-size:10px;letter-spacing:1px;color:var(--accent);border:1px solid var(--line);padding:2px 7px;border-radius:20px}
+  .card .body{padding:16px}
+  .drop{border:1.5px dashed var(--line);border-radius:9px;padding:18px 14px;text-align:center;cursor:pointer;transition:.15s;background:var(--panel2)}
+  .drop:hover,.drop.over{border-color:var(--accent);background:var(--drop-hover)}
+  .drop .ico{font-family:var(--mono);font-size:20px;color:var(--accent);margin-bottom:4px}
+  .drop .t{font-size:14px}.drop .h{font-size:11.5px;color:var(--ink-faint);margin-top:4px;font-family:var(--mono)}
+  .filename{font-family:var(--mono);font-size:12px;color:var(--ok);margin-top:9px;word-break:break-all}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #1c2128}
+  .row:last-child{border-bottom:none}.row label{font-size:13px;color:var(--ink-dim)}
+  .row .hint{font-size:11px;color:var(--ink-faint);font-family:var(--mono)}
+  input[type=number],input[type=text],select{background:var(--panel2);border:1px solid var(--line);color:var(--ink);font-family:var(--mono);font-size:13px;border-radius:6px;padding:6px 9px;width:104px;text-align:right}
+  input[type=text]{width:150px;text-align:left}select{width:118px;text-align:left}
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  .toggle{position:relative;width:42px;height:23px;flex:0 0 auto}
+  .toggle input{opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+  .toggle .track{position:absolute;inset:0;background:#2a2f38;border-radius:20px;transition:.15s;pointer-events:none}
+  .toggle .knob{position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;background:#7c8696;transition:.15s;pointer-events:none}
+  .toggle input:checked ~ .track{background:rgba(255,127,50,.35)}
+  .toggle input:checked ~ .knob{left:22px;background:var(--accent)}
+  .btn{display:block;width:100%;margin-top:14px;padding:12px;border:none;border-radius:8px;background:var(--accent);color:#1a0f06;font-family:var(--disp);font-weight:700;font-size:15px;cursor:pointer;transition:.15s}
+  .btn:hover{filter:brightness(1.08)}.btn:disabled{background:#2a2f38;color:var(--ink-faint);cursor:not-allowed}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);margin-top:9px}
+  .btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.tiny{font-size:12px;padding:8px;margin-top:0}
+  .viewer-card{display:flex;flex-direction:column}
+  .vtop{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .seg{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .seg button{background:var(--panel2);border:none;color:var(--ink-dim);font-family:var(--mono);font-size:12px;padding:6px 12px;cursor:pointer}
+  .seg button.on{background:var(--accent);color:#1a0f06;font-weight:600}
+  .chk{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;color:var(--ink-dim);cursor:pointer}.chk input{accent-color:var(--accent)}
+  #view{flex:1;min-height:430px;position:relative;background:radial-gradient(circle at 50% 30%,var(--view-glow) 0%,var(--view-bg) 80%)}
+  #view canvas{display:block}
+  .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--ink-faint);font-family:var(--mono);font-size:13px;gap:8px;text-align:center;padding:20px}
+  .empty .big{font-size:34px;color:#2c333d}
+  .readout{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line)}
+  .readout .cell{background:var(--panel);padding:11px 14px}
+  .readout .k{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink-faint)}
+  .readout .v{font-family:var(--mono);font-size:17px;color:var(--ink);margin-top:3px}.readout .v small{font-size:11px;color:var(--ink-dim)}
+  @media(max-width:880px){.readout{grid-template-columns:repeat(2,1fr)}}
+  .log{font-family:var(--mono);font-size:12px;line-height:1.7;margin-top:14px;background:var(--view-bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;max-height:210px;overflow:auto}
+  .log .ln{display:flex;gap:8px}.log .ln::before{content:"›";color:var(--ink-faint)}
+  .log .ok::before{content:"✓";color:var(--ok)}
+  .log .warn{color:var(--warn)}.log .warn::before{content:"!";color:var(--warn)}
+  .log .bad{color:var(--bad)}.log .bad::before{content:"✕";color:var(--bad)}
+  .legend{position:absolute;bottom:12px;left:14px;font-family:var(--mono);font-size:11px;color:var(--ink-dim);background:rgba(10,12,15,.7);padding:6px 9px;border-radius:6px;border:1px solid var(--line)}
+  .legend .bar{display:inline-block;width:60px;height:8px;border-radius:4px;vertical-align:middle;margin:0 6px;background:linear-gradient(90deg,#3a2a55,#ff7f32,#ffe08a)}
+  .note{font-size:12px;color:var(--ink-faint);margin-top:14px;line-height:1.6}
+  .flavor{font-family:var(--mono);font-size:11px;color:var(--ink-dim);margin-top:8px}
+  .flavor b{color:var(--accent-soft)}
+  .adv{margin-top:6px}
+  details summary{cursor:pointer;font-family:var(--mono);font-size:12px;color:var(--ink-dim);padding:6px 0}
+  details summary:hover{color:var(--accent)}
+  .top-controls{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
+  .top-controls select{width:auto;text-align:left;padding:5px 8px}
+  #devBar{max-width:1280px;margin:0 auto 18px;padding:0 22px;text-align:center;font-family:var(--mono);font-size:12px;color:var(--ink-faint)}
+  #devBar a{display:inline-flex;align-items:center;gap:7px;text-decoration:none;color:var(--ink-dim);border:1px solid var(--line);border-radius:999px;padding:7px 12px;background:var(--panel)}
+  #devBar a:hover{border-color:var(--accent);color:var(--accent)}
+  #devBar svg path{fill:var(--accent)}
+  .beta{color:var(--accent);font-size:10px;border:1px solid var(--line);border-radius:999px;padding:1px 6px;margin-left:4px}
+  .sub{margin-left:0}
+  @media(max-width:880px){.top-controls{width:100%;margin-left:0}.top-controls .sub{width:100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><b>Prints</b>NCode</div>
+    <h1 data-i18n="title">Conversor universal de G-code</h1>
+    <div class="top-controls">
+      <div class="sub"><span class="dot"></span><span data-i18n="subtitle">injerta geometría en cualquier impresora</span></div>
+      <select id="langSel" title="Language">
+        <option value="es">ES</option><option value="en">EN</option><option value="fr">FR</option><option value="de">DE</option><option value="pt">PT</option><option value="it">IT</option>
+      </select>
+      <select id="themeSel" title="Theme">
+        <option value="dark" data-i18n="themeDark">Oscuro</option>
+        <option value="light" data-i18n="themeLight">Claro</option>
+      </select>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- IZQUIERDA -->
+    <div>
+      <div class="card">
+        <h2><span data-i18n="s1">1 · Plantilla del destino</span> <span class="tag" id="flavorTag">—</span></h2>
+        <div class="body">
+          <div class="drop" id="dropT">
+            <div class="ico">[ ⌂ ]</div>
+            <div class="t" data-i18n-html="dropTpl">G-code que <b>ya imprime</b> en tu impresora</div>
+            <div class="h" data-i18n="dropTplH">define inicio + purga + fin + perfil (cualquier marca)</div>
+            <input type="file" id="fileT" accept=".gcode,.gco,.g,.txt" hidden>
+          </div>
+          <div class="filename" id="fnameT"></div>
+          <div class="flavor" id="flavorInfo"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:18px">
+        <h2 data-i18n="s2">2 · G-code a convertir</h2>
+        <div class="body">
+          <div class="drop" id="drop">
+            <div class="ico">[ + ]</div>
+            <div class="t" data-i18n-html="dropSrc">Arrastra el <b>.gcode</b> de origen</div>
+            <div class="h" data-i18n="dropSrcH">FullControl u otro · se reutiliza solo su recorrido</div>
+            <input type="file" id="file" accept=".gcode,.gco,.g,.txt" hidden>
+          </div>
+          <div class="filename" id="fname"></div>
+          <button class="btn ghost tiny" id="example" style="margin-top:12px">⚡ <span data-i18n="exampleBtn">Cargar ejemplo (impresora 220 mm + jarrón ondulado)</span></button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:18px">
+        <h2 data-i18n="s3">3 · Parámetros</h2>
+        <div class="body" id="params">
+          <div class="row"><label data-i18n="material">Material</label>
+            <select id="material"><option>PETG</option><option>PLA</option><option>ABS</option><option>TPU</option></select></div>
+          <div class="row"><label data-i18n="nozzle">Temp. boquilla (°C)</label><input type="number" id="tnozzle" value="230"></div>
+          <div class="row"><label data-i18n="bedtemp">Temp. cama (°C)</label><input type="number" id="tbed" value="75"></div>
+          <div class="row"><label data-i18n="fan">Ventilador (%)</label><input type="number" id="fan" value="50" min="0" max="100"></div>
+          <div class="row"><label data-i18n="layerh">Altura de capa (mm)</label><input type="number" id="layerh" value="0.2" step="0.05"></div>
+          <div class="row"><label data-i18n="bedsize">Tamaño cama X,Y (mm)</label>
+            <span><input type="number" id="bedx" value="260" style="width:50px"> <input type="number" id="bedy" value="260" style="width:50px"></span></div>
+          <div class="row"><label data-i18n="centerbed">Centrar en la cama</label>
+            <span class="toggle"><input type="checkbox" id="recenter" checked><span class="track"></span><span class="knob"></span></span></div>
+          <div class="row"><label data-i18n="objname">Nombre del objeto</label><input type="text" id="objname" value="FC_Converted"></div>
+
+          <details class="adv" id="advancedBox">
+            <summary><span data-i18n="advancedSum">Modo avanzado</span> <span class="beta">beta</span></summary>
+
+            <details class="adv" id="rippleBox">
+            <summary data-i18n="rippleSum">✦ Textura ondulada / "saltos" (modo jarrón)</summary>
+            <div class="row"><label data-i18n="applywaves">Aplicar ondas</label>
+              <span class="toggle"><input type="checkbox" id="ripple"><span class="track"></span><span class="knob"></span></span></div>
+            <div class="row"><label data-i18n="depth">Profundidad (mm)</label><input type="number" id="ripDepth" value="0.8" step="0.1"></div>
+            <div class="row"><label data-i18n="waves">Ondas por vuelta</label><input type="number" id="ripN" value="30" step="1"></div>
+            <div class="row"><label data-i18n="twist">Torsión (°/mm)</label><input type="number" id="ripTwist" value="0" step="1"></div>
+            <div class="hint" style="padding-top:4px">Añade el relieve ondulado tipo lámpara a <b>cualquier</b> modelo, desplazando radialmente cada punto del recorrido. Pensado para piezas de <b>pared única / modo jarrón</b>; en modelos con relleno o varias paredes puede deformar. Torsión &gt; 0 hace las ondas en espiral.</div>
+          </details>
+
+          <details class="adv">
+            <summary data-i18n="fineSum">Ajustes finos (calidad de las ondas)</summary>
+            <div class="row"><label data-i18n="kfactorLbl">Pressure advance K</label><input type="number" id="kfactor" value="0.04" step="0.005"></div>
+            <div class="row"><label data-i18n="scvLbl">Square corner vel.</label><input type="number" id="scv" value="9" step="1"></div>
+            <div class="hint" style="padding-top:4px">Las ondas del modelo se conservan siempre. Estos valores solo afinan cómo se imprimen: sube K para que el flujo siga mejor las ondas; baja SCV para esquinas más suaves.</div>
+          </details>
+
+          <details class="adv" id="genericBox" style="display:none">
+            <summary data-i18n="genericSum">Modo genérico · límites del cuerpo (experimental)</summary>
+            <div class="row"><label data-i18n="hdrline">Cabecera hasta línea</label><input type="number" id="hdrLine" value="0"></div>
+            <div class="row"><label data-i18n="ftrline">Pie desde línea</label><input type="number" id="ftrLine" value="0"></div>
+            <div class="hint" style="padding-top:4px">Auto-detectado. Si el corte sale mal, ajústalo a mano y reconvierte.</div>
+          </details>
+
+          </details>
+
+          <button class="btn" id="convert" data-i18n="convertBtn" disabled>Convertir</button>
+          <button class="btn ghost" id="download" data-i18n="downloadBtn" disabled>Descargar .gcode</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- DERECHA -->
+    <div>
+      <div class="card viewer-card">
+        <div class="vtop">
+          <div class="seg"><button id="seg-conv" class="on" data-i18n="converted">Convertido</button><button id="seg-orig" data-i18n="original">Original</button></div>
+          <label class="chk"><input type="checkbox" id="showTravel"> <span data-i18n="travels">Viajes</span></label>
+          <label class="chk"><input type="checkbox" id="showBed" checked> <span data-i18n="bed">Cama</span></label>
+          <span style="margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-faint)"><span data-i18n="controlsHint">arrastra: rotar · rueda: zoom · clic dcho: mover</span></span>
+        </div>
+        <div id="view">
+          <div class="empty" id="empty"><div class="big">⌬</div><span data-i18n="empty">Carga una plantilla y un G-code, o pulsa "Cargar ejemplo"</span></div>
+          <div class="legend" id="legend" style="display:none"><span data-i18n="zlow">Z bajo</span><span class="bar"></span><span data-i18n="zhigh">Z alto</span></div>
+        </div>
+        <div class="readout">
+          <div class="cell"><div class="k" data-i18n="height">Altura</div><div class="v" id="r-h">—</div></div>
+          <div class="cell"><div class="k" data-i18n="footprint">Huella XY</div><div class="v" id="r-xy">—</div></div>
+          <div class="cell"><div class="k" data-i18n="layers">Capas</div><div class="v" id="r-layers">—</div></div>
+          <div class="cell"><div class="k" data-i18n="filament">Filamento</div><div class="v" id="r-fil">—</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:18px">
+        <h2 data-i18n="logTitle">Registro</h2>
+        <div class="body">
+          <div class="log" id="log"><div class="ln" data-i18n="waiting">Esperando archivos…</div></div>
+          <div class="note">El destino lo define <b>la plantilla</b>: se conserva su secuencia de inicio (homing, calentado, purga, nivelación) y de fin, y se sustituye solo el recorrido del objeto por el del G-code de origen, recentrado a la cama. Verificado para impresoras <b>AnycubicSlicerNext / Klipper</b> (bloque <code>EXECUTABLE_BLOCK</code>); para otras marcas el modo genérico es de mejor esfuerzo: revisa el corte y la primera capa.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const I18N={
+  es:{title:"Conversor universal de G-code",subtitle:"injerta geometría en cualquier impresora",themeDark:"Oscuro",themeLight:"Claro",s1:"1 · Plantilla del destino",dropTpl:"G-code que <b>ya imprime</b> en tu impresora",dropTplH:"define inicio + purga + fin + perfil (cualquier marca)",s2:"2 · G-code a convertir",dropSrc:"Arrastra el <b>.gcode</b> de origen",dropSrcH:"FullControl u otro · se reutiliza solo su recorrido",exampleBtn:"Cargar ejemplo (impresora 220 mm + jarrón ondulado)",s3:"3 · Parámetros",material:"Material",nozzle:"Temp. boquilla (°C)",bedtemp:"Temp. cama (°C)",fan:"Ventilador (%)",layerh:"Altura de capa (mm)",bedsize:"Tamaño cama X,Y (mm)",centerbed:"Centrar en la cama",objname:"Nombre del objeto",advancedSum:"Modo avanzado",rippleSum:"✦ Textura ondulada / saltos (modo jarrón)",applywaves:"Aplicar ondas",depth:"Profundidad (mm)",waves:"Ondas por vuelta",twist:"Torsión (°/mm)",fineSum:"Ajustes finos (calidad de las ondas)",kfactorLbl:"Pressure advance K",scvLbl:"Square corner vel.",genericSum:"Modo genérico · límites del cuerpo (experimental)",hdrline:"Cabecera hasta línea",ftrline:"Pie desde línea",convertBtn:"Convertir",downloadBtn:"Descargar .gcode",converted:"Convertido",original:"Original",travels:"Viajes",bed:"Cama",controlsHint:"arrastra: rotar · rueda: zoom · clic dcho: mover",empty:"Carga una plantilla y un G-code, o pulsa Cargar ejemplo",zlow:"Z bajo",zhigh:"Z alto",height:"Altura",footprint:"Huella XY",layers:"Capas",filament:"Filamento",logTitle:"Registro",waiting:"Esperando archivos…",devBy:"Developed by Teo"},
+  en:{title:"Universal G-code converter",subtitle:"inject geometry into any printer profile",themeDark:"Dark",themeLight:"Light",s1:"1 · Target template",dropTpl:"G-code that <b>already prints</b> on your printer",dropTplH:"defines start + purge + end + profile (any brand)",s2:"2 · G-code to convert",dropSrc:"Drop the source <b>.gcode</b>",dropSrcH:"FullControl or other · only the toolpath is reused",exampleBtn:"Load example (220 mm printer + wavy vase)",s3:"3 · Parameters",material:"Material",nozzle:"Nozzle temp. (°C)",bedtemp:"Bed temp. (°C)",fan:"Fan (%)",layerh:"Layer height (mm)",bedsize:"Bed size X,Y (mm)",centerbed:"Center on bed",objname:"Object name",advancedSum:"Advanced mode",rippleSum:"✦ Wavy texture / jumps (vase mode)",applywaves:"Apply waves",depth:"Depth (mm)",waves:"Waves per turn",twist:"Twist (°/mm)",fineSum:"Fine tuning (wave quality)",kfactorLbl:"Pressure advance K",scvLbl:"Square corner vel.",genericSum:"Generic mode · body limits (experimental)",hdrline:"Header until line",ftrline:"Footer from line",convertBtn:"Convert",downloadBtn:"Download .gcode",converted:"Converted",original:"Original",travels:"Travel",bed:"Bed",controlsHint:"drag: rotate · wheel: zoom · right click: pan",empty:"Load a template and a G-code, or press Load example",zlow:"Low Z",zhigh:"High Z",height:"Height",footprint:"XY footprint",layers:"Layers",filament:"Filament",logTitle:"Log",waiting:"Waiting for files…",devBy:"Developed by Teo"},
+  fr:{title:"Convertisseur universel de G-code",subtitle:"injecte la géométrie dans n’importe quelle imprimante",themeDark:"Sombre",themeLight:"Clair",s1:"1 · Modèle cible",dropTpl:"G-code qui <b>imprime déjà</b> sur ton imprimante",dropTplH:"définit début + purge + fin + profil",s2:"2 · G-code à convertir",dropSrc:"Dépose le <b>.gcode</b> source",dropSrcH:"FullControl ou autre · seul le parcours est réutilisé",exampleBtn:"Charger l’exemple",s3:"3 · Paramètres",material:"Matériau",nozzle:"Temp. buse (°C)",bedtemp:"Temp. plateau (°C)",fan:"Ventilateur (%)",layerh:"Hauteur de couche (mm)",bedsize:"Taille plateau X,Y (mm)",centerbed:"Centrer sur le plateau",objname:"Nom de l’objet",advancedSum:"Mode avancé",rippleSum:"✦ Texture ondulée / sauts (mode vase)",applywaves:"Appliquer les vagues",depth:"Profondeur (mm)",waves:"Vagues par tour",twist:"Torsion (°/mm)",fineSum:"Réglages fins",genericSum:"Mode générique · limites du corps",hdrline:"En-tête jusqu’à la ligne",ftrline:"Pied depuis la ligne",convertBtn:"Convertir",downloadBtn:"Télécharger .gcode",converted:"Converti",original:"Original",travels:"Déplacements",bed:"Plateau",controlsHint:"glisser: tourner · molette: zoom · clic droit: déplacer",empty:"Charge un modèle et un G-code",zlow:"Z bas",zhigh:"Z haut",height:"Hauteur",footprint:"Empreinte XY",layers:"Couches",filament:"Filament",logTitle:"Journal",waiting:"En attente de fichiers…",devBy:"Developed by Teo"},
+  de:{title:"Universeller G-code-Konverter",subtitle:"Geometrie in jedes Druckerprofil einsetzen",themeDark:"Dunkel",themeLight:"Hell",s1:"1 · Zielvorlage",dropTpl:"G-code, der auf deinem Drucker <b>bereits druckt</b>",dropTplH:"definiert Start + Purge + Ende + Profil",s2:"2 · G-code konvertieren",dropSrc:"Quell-<b>.gcode</b> ablegen",dropSrcH:"FullControl oder anderes · nur der Pfad wird genutzt",exampleBtn:"Beispiel laden",s3:"3 · Parameter",material:"Material",nozzle:"Düsentemp. (°C)",bedtemp:"Betttemp. (°C)",fan:"Lüfter (%)",layerh:"Schichthöhe (mm)",bedsize:"Bettgröße X,Y (mm)",centerbed:"Auf Bett zentrieren",objname:"Objektname",advancedSum:"Erweiterter Modus",rippleSum:"✦ Wellenstruktur / Sprünge (Vasenmodus)",applywaves:"Wellen anwenden",depth:"Tiefe (mm)",waves:"Wellen pro Umdrehung",twist:"Drehung (°/mm)",fineSum:"Feinabstimmung",genericSum:"Generischer Modus · Körpergrenzen",hdrline:"Header bis Zeile",ftrline:"Footer ab Zeile",convertBtn:"Konvertieren",downloadBtn:".gcode herunterladen",converted:"Konvertiert",original:"Original",travels:"Fahrwege",bed:"Bett",controlsHint:"ziehen: drehen · Rad: zoom · Rechtsklick: verschieben",empty:"Vorlage und G-code laden",zlow:"Z niedrig",zhigh:"Z hoch",height:"Höhe",footprint:"XY-Fläche",layers:"Schichten",filament:"Filament",logTitle:"Protokoll",waiting:"Warte auf Dateien…",devBy:"Developed by Teo"},
+  pt:{title:"Conversor universal de G-code",subtitle:"injeta geometria em qualquer impressora",themeDark:"Escuro",themeLight:"Claro",s1:"1 · Modelo de destino",dropTpl:"G-code que <b>já imprime</b> na tua impressora",dropTplH:"define início + purga + fim + perfil",s2:"2 · G-code a converter",dropSrc:"Arrasta o <b>.gcode</b> de origem",dropSrcH:"FullControl ou outro · só o percurso é reutilizado",exampleBtn:"Carregar exemplo",s3:"3 · Parâmetros",material:"Material",nozzle:"Temp. bico (°C)",bedtemp:"Temp. mesa (°C)",fan:"Ventoinha (%)",layerh:"Altura de camada (mm)",bedsize:"Tamanho da mesa X,Y (mm)",centerbed:"Centrar na mesa",objname:"Nome do objeto",advancedSum:"Modo avançado",rippleSum:"✦ Textura ondulada / saltos (modo vaso)",applywaves:"Aplicar ondas",depth:"Profundidade (mm)",waves:"Ondas por volta",twist:"Torção (°/mm)",fineSum:"Ajustes finos",genericSum:"Modo genérico · limites do corpo",hdrline:"Cabeçalho até linha",ftrline:"Rodapé desde linha",convertBtn:"Converter",downloadBtn:"Descarregar .gcode",converted:"Convertido",original:"Original",travels:"Viagens",bed:"Mesa",controlsHint:"arrastar: rodar · roda: zoom · botão direito: mover",empty:"Carrega um modelo e um G-code",zlow:"Z baixo",zhigh:"Z alto",height:"Altura",footprint:"Pegada XY",layers:"Camadas",filament:"Filamento",logTitle:"Registo",waiting:"À espera de ficheiros…",devBy:"Developed by Teo"},
+  it:{title:"Convertitore universale di G-code",subtitle:"inietta geometria in qualsiasi stampante",themeDark:"Scuro",themeLight:"Chiaro",s1:"1 · Template di destinazione",dropTpl:"G-code che <b>stampa già</b> sulla tua stampante",dropTplH:"definisce avvio + spurgo + fine + profilo",s2:"2 · G-code da convertire",dropSrc:"Trascina il <b>.gcode</b> sorgente",dropSrcH:"FullControl o altro · si riusa solo il percorso",exampleBtn:"Carica esempio",s3:"3 · Parametri",material:"Materiale",nozzle:"Temp. ugello (°C)",bedtemp:"Temp. piano (°C)",fan:"Ventola (%)",layerh:"Altezza layer (mm)",bedsize:"Dimensione piano X,Y (mm)",centerbed:"Centra sul piano",objname:"Nome oggetto",advancedSum:"Modalità avanzata",rippleSum:"✦ Texture ondulata / salti (modalità vaso)",applywaves:"Applica onde",depth:"Profondità (mm)",waves:"Onde per giro",twist:"Torsione (°/mm)",fineSum:"Regolazioni fini",genericSum:"Modo generico · limiti corpo",hdrline:"Header fino alla riga",ftrline:"Footer dalla riga",convertBtn:"Converti",downloadBtn:"Scarica .gcode",converted:"Convertito",original:"Originale",travels:"Viaggi",bed:"Piano",controlsHint:"trascina: ruota · rotella: zoom · destro: sposta",empty:"Carica un template e un G-code",zlow:"Z basso",zhigh:"Z alto",height:"Altezza",footprint:"Impronta XY",layers:"Layer",filament:"Filamento",logTitle:"Registro",waiting:"In attesa di file…",devBy:"Developed by Teo"}
+};
+function applyLang(lang){
+  const d=I18N[lang]||I18N.es, es=I18N.es;
+  document.documentElement.lang=lang;
+  document.querySelectorAll("[data-i18n]").forEach(el=>{const k=el.dataset.i18n; el.textContent=d[k]||es[k]||el.textContent;});
+  document.querySelectorAll("[data-i18n-html]").forEach(el=>{const k=el.dataset.i18nHtml; el.innerHTML=d[k]||es[k]||el.innerHTML;});
+  localStorage.setItem("pnc_lang",lang);
+}
+function applyTheme(theme){
+  document.documentElement.dataset.theme=theme;
+  localStorage.setItem("pnc_theme",theme);
+}
+const MATERIAL_PROFILES={PLA:{nozzle:220,bed:60,fan:100,k:0.036,scv:9},PETG:{nozzle:230,bed:75,fan:50,k:0.04,scv:9},ABS:{nozzle:245,bed:90,fan:25,k:0.04,scv:7},TPU:{nozzle:230,bed:50,fan:80,k:0.055,scv:5}};
+function applyMaterialProfile(mat){
+  const p=MATERIAL_PROFILES[mat]; if(!p)return;
+  $("tnozzle").value=p.nozzle; $("tbed").value=p.bed; $("fan").value=p.fan;
+  $("kfactor").value=p.k; $("scv").value=p.scv;
+}
+function patchRuntimeLine(line,opt){
+  const u=line.trim().toUpperCase();
+  if(/^G9111\b/.test(u)) return line.replace(/bedTemp=\d+/i,`bedTemp=${opt.tbed}`).replace(/extruderTemp=\d+/i,`extruderTemp=${opt.tnozzle}`);
+  if(/^M10[49]\b/.test(u) && /S\d/.test(u) && !/S0(?:\s|$)/.test(u)) return line.replace(/S\d+(?:\.\d+)?/,`S${opt.tnozzle}`);
+  if(/^M1[49]0\b/.test(u) && /S\d/.test(u) && !/S0(?:\s|$)/.test(u)) return line.replace(/S\d+(?:\.\d+)?/,`S${opt.tbed}`);
+  if(/^M106\b/.test(u) && /S\d/.test(u) && !/S0(?:\s|$)/.test(u)) return line.replace(/S\d+/,`S${Math.round(255*opt.fan/100)}`);
+  if(/^M900\b/.test(u)) return line.replace(/K[0-9.]+/,`K${opt.kfactor}`);
+  if(/SQUARE_CORNER_VELOCITY=[0-9.]+/i.test(line)) return line.replace(/SQUARE_CORNER_VELOCITY=[0-9.]+/ig,`SQUARE_CORNER_VELOCITY=${opt.scv}`);
+  return line;
+}
+function patchRuntimeBlock(txt,opt){return txt.split("\n").map(l=>patchRuntimeLine(l,opt)).join("\n");}
+function runtimeOverrideLines(opt){
+  return ["; PNC_RUNTIME_OVERRIDES",`M140 S${opt.tbed}`,`M104 S${opt.tnozzle}`,`M106 S${Math.round(255*opt.fan/100)}`,`M900 K${opt.kfactor}`,`SET_VELOCITY_LIMIT SQUARE_CORNER_VELOCITY=${opt.scv}`,"; PNC_RUNTIME_OVERRIDES_END"];
+}
+function repeatList(oldValue,newValue){const n=Math.max(1,String(oldValue).split(",").length);return Array(n).fill(newValue).join(",");}
+
+let RAW="", RAW_TPL="", ORIG=null, CONV=null, CONV_TEXT="", VIEW_MODE="conv", FLAVOR="";
+const $=id=>document.getElementById(id);
+const log=$("log");
+function logLine(m,c=""){const d=document.createElement("div");d.className="ln "+c;d.textContent=m;log.appendChild(d);log.scrollTop=log.scrollHeight;}
+function clearLog(){log.innerHTML="";}
+
+/* ---------- PARSER de G-code de origen ---------- */
+function parseGcode(text){
+  const lines=text.split(/\r?\n/);
+  let x=0,y=0,z=0,f=1800,past=false,seen=false;
+  const moves=[]; const reTok=/([XYZEF])(-?\d*\.?\d+)/g;
+  for(const line of lines){
+    const s=line.trim();
+    if(s.indexOf("END OF PRIMER")>=0){past=true;continue;}
+    if(s.indexOf("PRIMER PROCEDURE")>=0)seen=true;
+    if(!/^G[01]\b/.test(s))continue;
+    let nx=x,ny=y,nz=z,ne=0,hasMove=false,hasE=false,m; reTok.lastIndex=0;
+    while((m=reTok.exec(s))){const v=parseFloat(m[2]);
+      if(m[1]==="X"){nx=v;hasMove=true;}else if(m[1]==="Y"){ny=v;hasMove=true;}
+      else if(m[1]==="Z")nz=v;else if(m[1]==="E"){ne=v;hasE=true;}else if(m[1]==="F")f=v;}
+    if((past||!seen)&&(hasMove||nz!==z)) moves.push({x:nx,y:ny,z:nz,e:hasE?ne:0,f,ext:hasE&&ne>0});
+    x=nx;y=ny;z=nz;
+  }
+  return {moves,bbox:bboxOf(moves)};
+}
+function bboxOf(moves){
+  let a=1e9,b=-1e9,c=1e9,d=-1e9,e=1e9,g=-1e9;
+  for(const p of moves){if(!p.ext)continue;
+    if(p.x<a)a=p.x;if(p.x>b)b=p.x;if(p.y<c)c=p.y;if(p.y>d)d=p.y;if(p.z<e)e=p.z;if(p.z>g)g=p.z;}
+  if(a>b){a=c=e=0;b=d=g=0;}
+  return {minx:a,maxx:b,miny:c,maxy:d,minz:e,maxz:g,cx:(a+b)/2,cy:(c+d)/2,w:b-a,d:d-c,h:g-e};
+}
+
+/* ---------- detección de la plantilla ---------- */
+function detectFlavor(t){
+  return (t.indexOf("; EXECUTABLE_BLOCK_START")>=0 && t.indexOf("EXCLUDE_OBJECT_START")>=0)?"anycubic":"generic";
+}
+function detectBed(t){
+  // 1) Anycubic / Prusa / perfiles con tamaño directo
+  let m=t.match(/(?:print_bed_size|bed_size|machine_size)\s*=\s*([0-9.]+)\s*[,xX]\s*([0-9.]+)/i);
+  if(m)return{x:+m[1],y:+m[2],src:"size"};
+
+  // 2) Orca/Bambu/Snapmaker: polígono tipo
+  // ; printable_area = 0.5x1,270.5x1,270.5x271,0.5x271
+  // ; bed_shape = 0.5x1,270.5x1,270.5x271,0.5x271
+  m=t.match(/(?:printable_area|bed_shape)\s*=\s*([^\r\n]+)/i);
+  if(m){
+    const pts=[...m[1].matchAll(/(-?\d*\.?\d+)\s*x\s*(-?\d*\.?\d+)/gi)]
+      .map(v=>({x:parseFloat(v[1]),y:parseFloat(v[2])}));
+    if(pts.length>=2){
+      const minx=Math.min(...pts.map(p=>p.x)), maxx=Math.max(...pts.map(p=>p.x));
+      const miny=Math.min(...pts.map(p=>p.y)), maxy=Math.max(...pts.map(p=>p.y));
+      const x=Math.round((maxx-minx)*100)/100, y=Math.round((maxy-miny)*100)/100;
+      if(x>0&&y>0)return{x,y,src:m[0].split("=")[0].trim()};
+    }
+  }
+
+  // 3) Altura imprimible, por si solo aparece el modelo de impresora
+  // Snapmaker U1 suele venir como 270x270 con área 0.5..270.5 / 1..271.
+  if(/printer_model\s*=\s*Snapmaker U1|print_compatible_printers\s*=\s*"Snapmaker U1/i.test(t))
+    return{x:270,y:270,src:"Snapmaker U1 fallback"};
+
+  return null;
+}
+function detectK(t){const m=t.match(/M900 K([0-9.]+)/);return m?+m[1]:null;}
+function detectSCV(t){const m=t.match(/SQUARE_CORNER_VELOCITY=([0-9.]+)/);return m?+m[1]:null;}
+function detectName(t){const m=t.match(/EXCLUDE_OBJECT_DEFINE NAME=([^\s]+)/);return m?m[1]:null;}
+
+/* ---------- geometría (común a ambos modos) ---------- */
+function buildGeometry(moves,opt){
+  const lh=opt.layerh>0?opt.layerh:0.2;
+  const p0=moves[0], z0=moves.length?moves[0].z:lh;
+  const L=[]; let cur=-1,total=0,usedE=0,lastF=null;
+  L.push(`G1 X${p0.x.toFixed(3)} Y${p0.y.toFixed(3)} Z${p0.z.toFixed(3)} F18000`);
+  L.push("G1 E0.9 F1800");
+  for(let i=1;i<moves.length;i++){
+    const p=moves[i], ly=Math.floor((p.z-z0)/lh);
+    if(ly>cur){cur=ly;total++;
+      L.push(";LAYER_CHANGE");L.push(`;Z:${p.z.toFixed(3)}`);L.push(`;HEIGHT:${lh}`);
+      L.push(`; AFTER_LAYER_CHANGE ${cur} @ ${p.z.toFixed(3)}mm`);}
+    const fS=(p.f!==lastF)?` F${p.f.toFixed(0)}`:""; lastF=p.f;
+    if(p.ext){usedE+=p.e;L.push(`G1 X${p.x.toFixed(3)} Y${p.y.toFixed(3)} Z${p.z.toFixed(3)} E${p.e.toFixed(5)}${fS}`);}
+    else L.push(`G1 X${p.x.toFixed(3)} Y${p.y.toFixed(3)} Z${p.z.toFixed(3)}${fS}`);
+  }
+  return {lines:L,totalLayers:total,usedE};
+}
+function applyOffset(orig,opt){
+  let dx=0,dy=0;
+  if(opt.recenter){dx=opt.cx-orig.bbox.cx;dy=opt.cy-orig.bbox.cy;}
+  const moves=orig.moves.map(p=>({...p,x:p.x+dx,y:p.y+dy}));
+  return {moves,bbox:bboxOf(moves),off:{dx,dy}};
+}
+/* Añade relieve ondulado tipo jarrón desplazando cada punto radialmente */
+function applyRipples(moves,center,opt){
+  if(!opt.ripple||opt.ripDepth<=0)return moves;
+  const N=Math.max(1,opt.ripN), amp=opt.ripDepth, tw=opt.ripTwist*Math.PI/180;
+  return moves.map(p=>{
+    const dx=p.x-center.cx, dy=p.y-center.cy, r=Math.sqrt(dx*dx+dy*dy);
+    if(r<0.5)return p;
+    const ang=Math.atan2(dy,dx);
+    const off=amp*0.5*(1-Math.cos(N*ang+tw*p.z)); // 0..amp, N crestas por vuelta
+    const nr=r+off;
+    return {...p,x:center.cx+nr*Math.cos(ang),y:center.cy+nr*Math.sin(ang)};
+  });
+}
+/* recentra + (opcional) ondula + recalcula bbox */
+function prepMoves(orig,opt){
+  const ap=applyOffset(orig,opt);
+  const center=opt.recenter?{cx:opt.cx,cy:opt.cy}:{cx:ap.bbox.cx,cy:ap.bbox.cy};
+  const moves=applyRipples(ap.moves,center,opt);
+  return {moves,bbox:bboxOf(moves),off:ap.off};
+}
+function patchMeta(txt,r){
+  const s=(re,v)=>{txt=txt.replace(re,v);};
+  s(/; total layer number: \d+/,"; total layer number: "+r.totalLayers);
+  s(/; max_z_height: [0-9.]+/,"; max_z_height: "+r.maxZ.toFixed(2));
+  s(/; used_filament = [0-9.]+/,"; used_filament = "+r.usedE.toFixed(2));
+  s(/; model_size = [0-9.,]+/,"; model_size = "+r.w.toFixed(2)+","+r.d.toFixed(2)+","+r.maxZ.toFixed(2));
+  s(/; total_layers = \d+/,"; total_layers = "+r.totalLayers);
+  txt=txt.replace(/; first_layer_temperature = ([0-9.,]+)/g,(m,v)=>"; first_layer_temperature = "+repeatList(v,r.opt.tnozzle));
+  txt=txt.replace(/; first_layer_bed_temperature = ([0-9.,]+)/g,(m,v)=>"; first_layer_bed_temperature = "+repeatList(v,r.opt.tbed));
+  txt=txt.replace(/; bed_temperature = ([0-9.,]+)/g,(m,v)=>"; bed_temperature = "+repeatList(v,r.opt.tbed));
+  txt=txt.replace(/; nozzle_temperature = ([0-9.,]+)/g,(m,v)=>"; nozzle_temperature = "+repeatList(v,r.opt.tnozzle));
+  txt=txt.replace(/; filament_type = [^\n]*/g,"; filament_type = "+r.opt.material);
+  txt=txt.replace(/; filament_settings_id = "[^"]*"/g,`; filament_settings_id = "PNC ${r.opt.material} converted"`);
+  return txt;
+}
+
+/* ---------- MODO ANYCUBIC / KLIPPER ---------- */
+function convertAnycubic(orig,opt){
+  const t=RAW_TPL, S="; EXECUTABLE_BLOCK_START", E="; EXECUTABLE_BLOCK_END";
+  const i=t.indexOf(S), j=t.indexOf(E);
+  const preamble=t.slice(0,i);
+  const exec=t.slice(i,j);            // de S hasta antes de E
+  const tail=t.slice(j);              // incluye E + CONFIG + stats
+  const aIdx=exec.indexOf("EXCLUDE_OBJECT_START");
+  const bIdx=exec.lastIndexOf("EXCLUDE_OBJECT_END");
+  let head=exec.slice(0,aIdx);                       // inicio + purga (de la plantilla)
+  const bEnd=exec.indexOf("\n",bIdx);
+  let foot=exec.slice(bEnd+1);                        // fin (M400, retract, cooldown…)
+
+  const ap=prepMoves(orig,opt); const bb=ap.bbox;
+  const MARGIN=0.5;
+  const minX=bb.minx-MARGIN,maxX=bb.maxx+MARGIN,minY=bb.miny-MARGIN,maxY=bb.maxy+MARGIN;
+  const maxZ=bb.maxz, oob=(minX<0||minY<0||maxX>opt.bedx||maxY>opt.bedy);
+
+  // overrides en la cabecera extraída
+  head=patchRuntimeBlock(head,opt);
+  head=head.replace(/EXCLUDE_OBJECT_DEFINE NAME=[^\n]*/,
+    `EXCLUDE_OBJECT_DEFINE NAME=${opt.objname} CENTER=${bb.cx.toFixed(3)},${bb.cy.toFixed(3)} `+
+    `POLYGON=[[${minX.toFixed(3)},${minY.toFixed(3)}],[${maxX.toFixed(3)},${minY.toFixed(3)}],`+
+    `[${maxX.toFixed(3)},${maxY.toFixed(3)}],[${minX.toFixed(3)},${maxY.toFixed(3)}]]`);
+  // refuerzo: algunos perfiles dejan placeholders o valores en otra posición
+  head=head.replace(/G9111 bedTemp=\d+ extruderTemp=\d+/,`G9111 bedTemp=${opt.tbed} extruderTemp=${opt.tnozzle}`);
+  // ajustar primer min/max declarados
+  head=head.replace(/; first_layer_print_min = [0-9.,]+/,`; first_layer_print_min = ${minX.toFixed(3)},${minY.toFixed(3)}`);
+  head=head.replace(/; first_layer_print_max = [0-9.,]+/,`; first_layer_print_max = ${maxX.toFixed(3)},${maxY.toFixed(3)}`);
+
+  // ajustar altura de elevación final del pie
+  foot=foot.replace(/G1 Z[0-9.]+ F1200/,`G1 Z${Math.min(maxZ+15,opt.bedy+25).toFixed(1)} F1200`);
+
+  const geo=buildGeometry(ap.moves,opt);
+  const objBlock=[...runtimeOverrideLines(opt),`EXCLUDE_OBJECT_START NAME=${opt.objname}`,";TYPE:Outer wall",";WIDTH:0.5",
+    ...geo.lines,`EXCLUDE_OBJECT_END NAME=${opt.objname}`].join("\n");
+
+  let txt=preamble+head+objBlock+"\n"+foot+tail;
+  const meta={totalLayers:geo.totalLayers,usedE:geo.usedE,maxZ,
+    w:(maxX-minX),d:(maxY-minY),opt};
+  txt=patchMeta(txt,meta);
+  return {text:txt,moves:ap.moves,bbox:bb,totalLayers:geo.totalLayers,usedE:geo.usedE,oob,off:ap.off};
+}
+
+/* ---------- MODO GENÉRICO (otras marcas) ---------- */
+function autoBody(lines){
+  let firstExt=-1,lastExt=-1,homed=false,layerMark=-1;
+  for(let i=0;i<lines.length;i++){
+    const s=lines[i].trim(),u=s.toUpperCase();
+    if(/^G28\b/.test(u))homed=true;
+    if(homed&&layerMark<0&&(u.includes("LAYER_CHANGE")||u.startsWith(";LAYER:")||u.startsWith("; LAYER ")||u.startsWith(";TYPE:")))layerMark=i;
+    if(/^G[01]\b/.test(s)){
+      const em=s.match(/E(-?\d*\.?\d+)/), xy=/[XY]-?\d/.test(s);
+      if(em&&parseFloat(em[1])>0&&xy){if(firstExt<0)firstExt=i;lastExt=i;}
+    }
+  }
+  let bodyStart=layerMark>0?layerMark:(firstExt>0?firstExt:0);
+  return {bodyStart,bodyEnd:lastExt>0?lastExt:lines.length-1};
+}
+function convertGeneric(orig,opt){
+  const lines=RAW_TPL.split(/\r?\n/);
+  let bs,be;
+  if(opt.hdrLine>0||opt.ftrLine>0){bs=opt.hdrLine;be=opt.ftrLine;}
+  else {const ab=autoBody(lines);bs=ab.bodyStart;be=ab.bodyEnd;
+    $("hdrLine").value=bs; $("ftrLine").value=be;}
+  let header=lines.slice(0,bs), footer=lines.slice(be+1);
+
+  // overrides en cabecera genérica
+  const fanS=Math.round(255*opt.fan/100);
+  header=header.map(l=>patchRuntimeLine(l,opt));
+
+  const ap=prepMoves(orig,opt),bb=ap.bbox;
+  const oob=(bb.minx<0||bb.miny<0||bb.maxx>opt.bedx||bb.maxy>opt.bedy);
+  const geo=buildGeometry(ap.moves,opt);
+  const txt=header.concat(runtimeOverrideLines(opt),[";TYPE:Outer wall"],geo.lines,footer).join("\n");
+  return {text:txt,moves:ap.moves,bbox:bb,totalLayers:geo.totalLayers,usedE:geo.usedE,oob,off:ap.off,bs,be};
+}
+
+function convert(orig,opt){ return FLAVOR==="anycubic"?convertAnycubic(orig,opt):convertGeneric(orig,opt); }
+
+/* ============================================================ VISOR 3D */
+let scene,camera,renderer,pathGroup,bedGroup,BEDX=260,BEDY=260;
+let cam={theta:-0.9,phi:1.0,dist:300,tx:0,ty:0,tz:0};
+function initViewer(){
+  const el=$("view");
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera(45,el.clientWidth/el.clientHeight,1,6000);
+  renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(2,window.devicePixelRatio));
+  renderer.setSize(el.clientWidth,el.clientHeight);
+  el.appendChild(renderer.domElement);
+  bedGroup=new THREE.Group();scene.add(bedGroup);
+  pathGroup=new THREE.Group();scene.add(pathGroup);
+  buildBed();attachControls(renderer.domElement);
+  window.addEventListener("resize",onResize);animate();
+}
+function onResize(){const el=$("view");camera.aspect=el.clientWidth/el.clientHeight;camera.updateProjectionMatrix();renderer.setSize(el.clientWidth,el.clientHeight);}
+function buildBed(){
+  bedGroup.clear();
+  const div=Math.max(10,Math.round(Math.max(BEDX,BEDY)/10));
+  const grid=new THREE.GridHelper(Math.max(BEDX,BEDY),div,0x2a313b,0x1c222a);
+  bedGroup.add(grid);
+  const edge=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(BEDX,BEDY)),new THREE.LineBasicMaterial({color:0x39414c}));
+  edge.rotation.x=-Math.PI/2;bedGroup.add(edge);
+}
+function colorForT(t){
+  const c1=[.23,.16,.33],c2=[1,.5,.2],c3=[1,.88,.54];let r,g,b;
+  if(t<0.5){const k=t/0.5;r=c1[0]+(c2[0]-c1[0])*k;g=c1[1]+(c2[1]-c1[1])*k;b=c1[2]+(c2[2]-c1[2])*k;}
+  else{const k=(t-0.5)/0.5;r=c2[0]+(c3[0]-c2[0])*k;g=c2[1]+(c3[1]-c2[1])*k;b=c2[2]+(c3[2]-c2[2])*k;}
+  return[r,g,b];
+}
+function drawPath(data){
+  pathGroup.clear();
+  if(!data||!data.moves.length)return;
+  const m=data.moves,bb=data.bbox;
+  const ox=BEDX/2,oy=BEDY/2,minz=bb.minz,span=Math.max(.001,bb.maxz-bb.minz);
+  const posE=[],colE=[],posT=[],colT=[],showT=$("showTravel").checked;
+  for(let i=1;i<m.length;i++){
+    const a=m[i-1],b=m[i];
+    const ax=a.x-ox,ay=a.z,az=-(a.y-oy),bx=b.x-ox,by=b.z,bz=-(b.y-oy),t=(b.z-minz)/span;
+    if(b.ext){const c=colorForT(t);posE.push(ax,ay,az,bx,by,bz);colE.push(c[0],c[1],c[2],c[0],c[1],c[2]);}
+    else if(showT){posT.push(ax,ay,az,bx,by,bz);colT.push(.25,.3,.38,.25,.3,.38);}
+  }
+  if(posE.length){const g=new THREE.BufferGeometry();
+    g.setAttribute("position",new THREE.Float32BufferAttribute(posE,3));
+    g.setAttribute("color",new THREE.Float32BufferAttribute(colE,3));
+    pathGroup.add(new THREE.LineSegments(g,new THREE.LineBasicMaterial({vertexColors:true})));}
+  if(posT.length){const g=new THREE.BufferGeometry();
+    g.setAttribute("position",new THREE.Float32BufferAttribute(posT,3));
+    g.setAttribute("color",new THREE.Float32BufferAttribute(colT,3));
+    pathGroup.add(new THREE.LineSegments(g,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.5})));}
+  cam.dist=Math.max(bb.w,bb.d,bb.h)*2.2+90;cam.tz=bb.h/2;
+  $("empty").style.display="none";$("legend").style.display="block";
+}
+function attachControls(dom){
+  let drag=false,pan=false,px,py;
+  dom.addEventListener("mousedown",e=>{if(e.button===2)pan=true;else drag=true;px=e.clientX;py=e.clientY;e.preventDefault();});
+  window.addEventListener("mouseup",()=>{drag=false;pan=false;});
+  window.addEventListener("mousemove",e=>{if(!drag&&!pan)return;const dx=e.clientX-px,dy=e.clientY-py;px=e.clientX;py=e.clientY;
+    if(drag){cam.theta-=dx*.008;cam.phi=Math.max(.05,Math.min(Math.PI-.05,cam.phi-dy*.008));}else{cam.tx-=dx*.4;cam.tz-=dy*.4;}});
+  dom.addEventListener("wheel",e=>{cam.dist*=(1+Math.sign(e.deltaY)*.1);cam.dist=Math.max(30,Math.min(2000,cam.dist));e.preventDefault();},{passive:false});
+  dom.addEventListener("contextmenu",e=>e.preventDefault());
+  let lt=null;
+  dom.addEventListener("touchstart",e=>{if(e.touches.length)lt={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
+  dom.addEventListener("touchmove",e=>{if(!lt||!e.touches.length)return;const dx=e.touches[0].clientX-lt.x,dy=e.touches[0].clientY-lt.y;lt={x:e.touches[0].clientX,y:e.touches[0].clientY};cam.theta-=dx*.008;cam.phi=Math.max(.05,Math.min(Math.PI-.05,cam.phi-dy*.008));},{passive:true});
+}
+function animate(){requestAnimationFrame(animate);
+  const x=cam.tx+cam.dist*Math.sin(cam.phi)*Math.cos(cam.theta),y=cam.tz+cam.dist*Math.cos(cam.phi),z=cam.dist*Math.sin(cam.phi)*Math.sin(cam.theta);
+  camera.position.set(x,y,z);camera.lookAt(cam.tx,cam.tz,cam.ty);
+  bedGroup.visible=$("showBed").checked;renderer.render(scene,camera);}
+
+/* ============================================================ UI */
+function readOpts(){return{
+  material:$("material").value,
+  tnozzle:parseInt($("tnozzle").value)||260,
+  tbed:parseInt($("tbed").value)||70,
+  fan:Math.min(100,Math.max(0,parseInt($("fan").value)||0)),
+  layerh:parseFloat($("layerh").value)||0.2,
+  bedx:parseFloat($("bedx").value)||260,
+  bedy:parseFloat($("bedy").value)||260,
+  objname:($("objname").value||"FC_Converted").replace(/[^A-Za-z0-9_]/g,"_"),
+  recenter:$("recenter").checked,
+  cx:(parseFloat($("bedx").value)||260)/2,
+  cy:(parseFloat($("bedy").value)||260)/2,
+  kfactor:parseFloat($("kfactor").value)||0.04,
+  scv:parseFloat($("scv").value)||9,
+  ripple:$("ripple").checked,
+  ripDepth:parseFloat($("ripDepth").value)||0,
+  ripN:parseInt($("ripN").value)||1,
+  ripTwist:parseFloat($("ripTwist").value)||0,
+  hdrLine:parseInt($("hdrLine").value)||0,
+  ftrLine:parseInt($("ftrLine").value)||0,
+};}
+function updateReadout(d){
+  $("r-h").innerHTML=d.bbox.h.toFixed(1)+" <small>mm</small>";
+  $("r-xy").innerHTML=d.bbox.w.toFixed(0)+"×"+d.bbox.d.toFixed(0)+" <small>mm</small>";
+  $("r-layers").innerHTML=d.totalLayers||"—";
+  $("r-fil").innerHTML=(d.usedE?d.usedE.toFixed(0):"—")+" <small>mm</small>";
+}
+function refreshView(){
+  const d=(VIEW_MODE==="conv"&&CONV)?CONV:ORIG;drawPath(d);
+  if(VIEW_MODE==="conv"&&CONV)updateReadout(CONV);
+  else if(ORIG)updateReadout({bbox:ORIG.bbox,totalLayers:"—",usedE:0});
+}
+function maybeEnable(){$("convert").disabled=!(ORIG&&RAW_TPL);}
+
+function ingestTemplate(text,fname){
+  RAW_TPL=text;
+  FLAVOR=detectFlavor(text);
+  $("flavorTag").textContent=FLAVOR==="anycubic"?"Anycubic / Klipper":"Genérico";
+  const ok=FLAVOR==="anycubic"?(text.indexOf("; EXECUTABLE_BLOCK_END")>=0):true;
+  $("fnameT").textContent=(ok?"✓ ":"✕ ")+fname;
+  logLine("Plantilla: "+fname+" · perfil "+FLAVOR,ok?"ok":"bad");
+  const bed=detectBed(text); if(bed){$("bedx").value=bed.x;$("bedy").value=bed.y;logLine("Cama detectada: "+bed.x+"×"+bed.y+" mm","ok");}
+  const k=detectK(text); if(k!=null)$("kfactor").value=k;
+  const scv=detectSCV(text); if(scv!=null)$("scv").value=scv;
+  const nm=detectName(text); if(nm)$("objname").value=nm.replace(/[^A-Za-z0-9_]/g,"_");
+  $("flavorInfo").innerHTML = FLAVOR==="anycubic"
+    ? "Detectado <b>EXECUTABLE_BLOCK</b> + <b>EXCLUDE_OBJECT</b> → ruta verificada."
+    : "Sin bloques Anycubic → modo genérico. Revisa el corte del cuerpo.";
+  $("genericBox").style.display = FLAVOR==="anycubic"?"none":"block";
+  maybeEnable();
+}
+function ingestSource(text,fname){
+  RAW=text; ORIG=parseGcode(text);
+  $("fname").textContent="✓ "+fname;
+  logLine("Origen: "+fname+" · "+ORIG.moves.length+" movimientos","ok");
+  logLine("Huella "+ORIG.bbox.w.toFixed(1)+"×"+ORIG.bbox.d.toFixed(1)+" mm · alto "+ORIG.bbox.h.toFixed(1)+" mm",);
+  maybeEnable(); VIEW_MODE="orig";setSeg();refreshView();
+}
+
+function handleTemplate(file){const r=new FileReader();r.onload=()=>ingestTemplate(r.result,file.name+" ("+(file.size/1024).toFixed(0)+" KB)");r.readAsText(file);}
+function handleFile(file){const r=new FileReader();r.onload=()=>ingestSource(r.result,file.name+" ("+(file.size/1024).toFixed(0)+" KB)");r.readAsText(file);}
+
+function doConvert(){
+  if(!ORIG||!RAW_TPL){logLine("Falta plantilla u origen","bad");return;}
+  const opt=readOpts();
+  BEDX=opt.bedx;BEDY=opt.bedy;buildBed();
+  try{CONV=convert(ORIG,opt);}catch(e){logLine("Error: "+e.message,"bad");return;}
+  CONV_TEXT=CONV.text;
+  if(FLAVOR==="anycubic")logLine("Injertado en EXECUTABLE_BLOCK (cabecera + CONFIG conservados)","ok");
+  else logLine("Modo genérico · cuerpo entre líneas "+CONV.bs+"–"+CONV.be+" reemplazado","ok");
+  if(opt.recenter)logLine("Centrado en cama ("+opt.cx+","+opt.cy+")");
+  if(opt.ripple&&opt.ripDepth>0)logLine("Textura ondulada aplicada · prof "+opt.ripDepth+" mm · "+opt.ripN+" ondas/vuelta · torsión "+opt.ripTwist+"°/mm","ok");
+  logLine(CONV.totalLayers+" capas @ "+opt.layerh+" mm · K="+opt.kfactor+" · SCV="+opt.scv);
+  if(CONV.oob)logLine("¡La pieza se sale de la cama "+opt.bedx+"×"+opt.bedy+"! Activa centrado o revisa tamaño.","bad");
+  else logLine("Pieza dentro de la cama","ok");
+  $("download").disabled=false;VIEW_MODE="conv";setSeg();refreshView();
+}
+function doDownload(){
+  if(!CONV_TEXT)return;
+  const base=($("objname").value||"convertido").replace(/[^A-Za-z0-9_]/g,"_");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([CONV_TEXT],{type:"text/plain"}));
+  a.download=base+"_convertido.gcode";a.click();URL.revokeObjectURL(a.href);
+  logLine("Descargado: "+a.download,"ok");
+}
+function setSeg(){$("seg-conv").classList.toggle("on",VIEW_MODE==="conv");$("seg-orig").classList.toggle("on",VIEW_MODE==="orig");}
+
+/* ---------- EJEMPLO integrado ---------- */
+const EXAMPLE_TPL=`; HEADER_BLOCK_START
+; generated by example (impresora 220mm Klipper)
+; total layer number: 1
+; filament_density: 1.24
+; filament_diameter: 1.75
+; max_z_height: 1
+; exclude_object: 1
+; model_instances: 1
+; HEADER_BLOCK_END
+
+; EXECUTABLE_BLOCK_START
+EXCLUDE_OBJECT_DEFINE NAME=Example CENTER=110.000,110.000 POLYGON=[[100,100],[120,100],[120,120],[100,120]]
+M73 P0 R1
+M201 X10000 Y10000 Z1000 E6500
+M203 X450 Y450 Z12 E250
+M204 P6500 R6500 T10000
+M205 X20.00 Y20.00 Z20.00 E1.00
+;TYPE:Custom
+G28
+G9111 bedTemp=60 extruderTemp=210
+M117
+; print_bed_min = 0,0
+; print_bed_max = 220,220
+; print_bed_size = 220,220
+; first_layer_print_min = 100,100
+; first_layer_print_max = 120,120
+G90
+G21
+M83 ; use relative distances for extrusion
+; EXECUTABLE_BLOCK_HEAD
+M900 K0.04; Override pressure advance value
+M75
+M106 S255
+;LAYER_CHANGE
+;Z:0.2
+ ; PURGE LINE
+M204 P500
+SET_VELOCITY_LIMIT SQUARE_CORNER_VELOCITY=5
+G1 Z0.50 F900
+G1 X150 Y0 F18000
+G1 Z0.25 F900
+G1 E0.8 F2400
+G1 X200 Y0 E3.0 F2400
+G1 Z0.5 F600
+G1 E-0.8 F2400
+EXCLUDE_OBJECT_START NAME=Example
+;TYPE:Outer wall
+;WIDTH:0.45
+G1 X110 Y95 Z0.2 F1800
+G1 X115 Y95 Z0.2 E0.5
+EXCLUDE_OBJECT_END NAME=Example
+M400
+G1 E-1.5 F2400
+G1 Z20 F1200
+M140 S0 ; turn off heatbed
+M104 S0 ; turn off temperature
+M107 ; turn off fan
+M84 ; disable motors
+; EXECUTABLE_BLOCK_END
+
+; CONFIG_BLOCK_START = begin
+; AnycubicSlicer_config = begin
+; filament_diameter = 1.75
+; nozzle_temperature = 210
+; first_layer_temperature = 210
+; first_layer_bed_temperature = 60
+; bed_temperature = 60
+; AnycubicSlicer_config = end
+; CONFIG_BLOCK_END = end
+
+; statistics = begin
+; used_filament = 1
+; model_size = 20.00,20.00,1.00
+; total_layers = 1
+; statistics = end
+`;
+function exampleSource(){
+  const r0=15,H=24,EH=0.2,segs=180,cx=110,cy=110,EW=0.45;   // cilindro liso
+  const area=Math.PI*Math.pow(1.75/2,2),factor=EW*EH/area;
+  const L=["; GCode created with FullControl - example cylinder","M83 ; relative extrusion",
+    "M140 S60","M104 S210","M190 S60","M109 S210","M106 S255",
+    ";-----","; START OF PRIMER PROCEDURE","G0 F6000 X10 Y10 Z0.2","G1 F1200 X90 Y10 E5.0",
+    ";-----","; END OF PRIMER PROCEDURE"];
+  const total=Math.round(H/EH)*segs; let px=null,py=null,pz=null;
+  for(let i=0;i<=total;i++){
+    const frac=i/total,z=0.2+frac*H,t=i/segs,ang=t*2*Math.PI;
+    const x=cx+r0*Math.cos(ang),y=cy+r0*Math.sin(ang);
+    if(px===null)L.push(`G1 F900 X${x.toFixed(3)} Y${y.toFixed(3)} Z${z.toFixed(4)}`);
+    else{const d=Math.sqrt((x-px)**2+(y-py)**2+(z-pz)**2);L.push(`G1 X${x.toFixed(3)} Y${y.toFixed(3)} Z${z.toFixed(4)} E${(d*factor).toFixed(5)}`);}
+    px=x;py=y;pz=z;
+  }
+  return L.join("\n");
+}
+function loadExample(){
+  clearLog();logLine("Cargando ejemplo…");
+  ingestTemplate(EXAMPLE_TPL,"ejemplo_impresora220.gcode (integrado)");
+  ingestSource(exampleSource(),"ejemplo_cilindro_liso.gcode (integrado)");
+  $("ripple").checked=true; $("advancedBox").open=true; $("rippleBox").open=true;
+  logLine("Activé la textura ondulada: el origen es un cilindro liso → pulsa Convertir y verás las ondas","ok");
+}
+
+/* ---------- listeners ---------- */
+function wireDrop(zone,input,handler){
+  $(zone).addEventListener("click",()=>$(input).click());
+  $(input).addEventListener("change",e=>{if(e.target.files[0])handler(e.target.files[0]);});
+  ["dragover","dragenter"].forEach(ev=>$(zone).addEventListener(ev,e=>{e.preventDefault();$(zone).classList.add("over");}));
+  ["dragleave","drop"].forEach(ev=>$(zone).addEventListener(ev,e=>{e.preventDefault();$(zone).classList.remove("over");}));
+  $(zone).addEventListener("drop",e=>{if(e.dataTransfer.files[0])handler(e.dataTransfer.files[0]);});
+}
+wireDrop("dropT","fileT",handleTemplate);
+wireDrop("drop","file",handleFile);
+$("example").addEventListener("click",loadExample);
+$("convert").addEventListener("click",doConvert);
+$("download").addEventListener("click",doDownload);
+$("seg-conv").addEventListener("click",()=>{if(CONV){VIEW_MODE="conv";setSeg();refreshView();}});
+$("seg-orig").addEventListener("click",()=>{if(ORIG){VIEW_MODE="orig";setSeg();refreshView();}});
+$("showTravel").addEventListener("change",refreshView);
+$("material").addEventListener("change",e=>applyMaterialProfile(e.target.value));
+$("bedx").addEventListener("change",()=>{BEDX=parseFloat($("bedx").value)||260;buildBed();});
+$("bedy").addEventListener("change",()=>{BEDY=parseFloat($("bedy").value)||260;buildBed();});
+
+const savedLang=localStorage.getItem("pnc_lang")||"es";
+const savedTheme=localStorage.getItem("pnc_theme")||"dark";
+$("langSel").value=savedLang; $("themeSel").value=savedTheme;
+applyLang(savedLang); applyTheme(savedTheme);
+$("langSel").addEventListener("change",e=>applyLang(e.target.value));
+$("themeSel").addEventListener("change",e=>applyTheme(e.target.value));
+initViewer();
+</script>
+<div id="devBar">
+  <a href="https://github.com/PrintsNCode" target="_blank" rel="noopener">
+    <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836a9.59 9.59 0 0 1 2.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+    <span data-i18n="devBy">Developed by PrintsNCode</span>
+  </a>
+</div>
+</body>
+</html>
